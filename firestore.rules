@@ -1,0 +1,152 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, 'Super Admin' | 'Branch Staff')
+    //   - branch: string (optional, 'Imus' | 'Quezon City')
+    //   - permissions: list (required)
+    //   - active: bool (required)
+    //
+    // Collection: products
+    // Fields:
+    //   - sku: string (required)
+    //   - name: string (required)
+    //   - brand: string (required)
+    //   - category: string (required)
+    //   - description: string (required)
+    //   - price: number (required, positive)
+    //   - costPrice: number (required, positive)
+    //   - stockQty: number (required)
+    //   - lowStockThreshold: number (required)
+    //   - branch: string (required, 'Imus' | 'Quezon City')
+    //   - imageUrl: string (required)
+    //   - status: string (required)
+    //
+    // Collection: transactions
+    // Fields:
+    //   - items: list (required)
+    //   - subtotal: number (required)
+    //   - tax: number (required)
+    //   - discount: number (required)
+    //   - total: number (required)
+    //   - paymentMethod: string (required)
+    //   - staffName: string (required)
+    //   - branch: string (required)
+    //   - timestamp: timestamp (required)
+    //
+    // Collection: bookings
+    // Fields:
+    //   - customerName: string (required)
+    //   - contact: string (required)
+    //   - instrumentType: string (required)
+    //   - status: string (required, 'Pending' | 'Ongoing' | 'Completed' | 'Claimed')
+    //   - progress: number (required, 0-100)
+    //   - branch: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (getUserData().role == 'Super Admin' || 
+         (request.auth.token.email == 'jamescamarines28@gmail.com' && request.auth.token.email_verified == true));
+    }
+    
+    function isBranchStaff(branch) {
+      return isAuthenticated() && 
+        getUserData().role == 'Branch Staff' && 
+        getUserData().branch == branch;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasRequiredFields(['name', 'email', 'role', 'active']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['Super Admin', 'Branch Staff'] &&
+             data.active is bool;
+    }
+
+    function isValidProduct(data) {
+      return hasRequiredFields(['sku', 'name', 'brand', 'category', 'price', 'stockQty', 'branch']) &&
+             data.sku is string && data.sku.size() > 0 &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is number && data.price >= 0 &&
+             data.stockQty is number &&
+             data.branch in ['Imus', 'Quezon City'];
+    }
+
+    function isValidBooking(data) {
+      return hasRequiredFields(['customerName', 'contact', 'instrumentType', 'status', 'progress', 'branch']) &&
+             data.customerName is string && data.customerName.size() > 0 &&
+             data.contact is string && data.contact.size() > 0 &&
+             data.instrumentType is string && data.instrumentType.size() > 0 &&
+             data.status in ['Pending', 'Ongoing', 'Completed', 'Claimed'] &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             data.branch in ['Imus', 'Quezon City'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidUser(request.resource.data);
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAdmin() || isBranchStaff(request.resource.data.branch)) && isValidProduct(request.resource.data);
+      allow update: if (isAdmin() || isBranchStaff(resource.data.branch)) && isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isAdmin() || isBranchStaff(request.resource.data.branch));
+      allow update, delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // Allow public bookings
+      allow update: if isAuthenticated() && (isAdmin() || isBranchStaff(resource.data.branch)) && isValidBooking(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}
