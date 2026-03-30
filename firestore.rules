@@ -67,7 +67,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         (getUserData().role == 'Super Admin' || 
-         (request.auth.token.email == 'jamescamarines28@gmail.com' && request.auth.token.email_verified == true));
+         request.auth.token.email == 'jamescamarines28@gmail.com');
     }
     
     function isBranchStaff(branch) {

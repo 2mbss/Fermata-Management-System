@@ -1,9 +1,12 @@
 import React from 'react';
-import { Search, Bell, History, User } from 'lucide-react';
+import { Search, Bell, History, User, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../lib/utils';
+import { useFirebase } from './FirebaseProvider';
 
 export default function TopBar() {
+  const { userData, logout } = useFirebase();
+
   return (
     <header className="h-16 bg-background border-b border-border flex items-center justify-between px-8 sticky top-0 z-40">
       {/* Search */}
@@ -46,12 +49,23 @@ export default function TopBar() {
         
         <div className="flex items-center gap-3 pl-4 border-l border-border">
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-bold text-white uppercase tracking-tighter">V. ROSSI</p>
-            <p className="text-[8px] text-accent uppercase tracking-widest font-bold">Master Luthier</p>
+            <p className="text-[10px] font-bold text-white uppercase tracking-tighter">
+              {userData?.name || 'SYSTEM_USER'}
+            </p>
+            <p className="text-[8px] text-accent uppercase tracking-widest font-bold">
+              {userData?.role || 'ACCESS_PENDING'}
+            </p>
           </div>
           <div className="w-8 h-8 bg-surface-elevated flex items-center justify-center border border-border">
             <User size={16} className="text-text-secondary" />
           </div>
+          <button 
+            onClick={logout}
+            className="ml-2 p-2 text-text-secondary hover:text-destructive transition-colors border border-transparent hover:border-destructive/20"
+            title="SECURE LOGOUT"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </div>
     </header>

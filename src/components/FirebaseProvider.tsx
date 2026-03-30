@@ -9,6 +9,7 @@ interface FirebaseContextType {
   userData: UserType | null;
   loading: boolean;
   login: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -32,13 +33,17 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           setUserData(userSnap.data() as UserType);
         } else {
           // Create default user profile for first-time login
+          // We use the email from the runtime context as the master admin
+          const masterAdminEmail = 'jamescamarines28@gmail.com';
+          const isMasterAdmin = currentUser.email === masterAdminEmail;
+
           const defaultUser: UserType = {
             id: currentUser.uid,
             email: currentUser.email || '',
-            name: currentUser.displayName || 'New User',
-            role: currentUser.email === 'jamescamarines28@gmail.com' ? 'Super Admin' : 'Branch Staff',
+            name: currentUser.displayName || (isMasterAdmin ? 'Master Admin' : 'Staff Member'),
+            role: isMasterAdmin ? 'Super Admin' : 'Branch Staff',
             branch: 'Imus', // Default branch
-            permissions: currentUser.email === 'jamescamarines28@gmail.com' ? ['all'] : ['pos', 'inventory'],
+            permissions: isMasterAdmin ? ['all'] : ['pos', 'inventory'],
             active: true
           };
           await setDoc(userRef, defaultUser);
@@ -59,12 +64,17 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     await signInWithPopup(auth, provider);
   };
 
+  const loginWithEmail = async (email: string, pass: string) => {
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    await signInWithEmailAndPassword(auth, email, pass);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
 
   return (
-    <FirebaseContext.Provider value={{ user, userData, loading, login, logout }}>
+    <FirebaseContext.Provider value={{ user, userData, loading, login, loginWithEmail, logout }}>
       {children}
     </FirebaseContext.Provider>
   );
